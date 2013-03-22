@@ -18,8 +18,8 @@ http://www.mulesoft.org/schema/mule/xml http://www.mulesoft.org/schema/mule/xml/
 
 	</spring:beans>
     
-    <flow name="BrightStarFlow1" doc:name="BrightStarFlow1">
-        <http:inbound-endpoint exchange-pattern="request-response" host="localhost" port="8081" path="brightStarProxy" doc:name="HTTP"/>
+    <flow name="proxyFlow" doc:name="proxyFlow">
+        <http:inbound-endpoint exchange-pattern="request-response" host="localhost" port="8081" path="serviceProxy" doc:name="HTTP"/>
         <cxf:proxy-service port="${service.port}" namespace="${service.namespace}" service="${service.name}" payload="body" wsdlLocation="${service.wsdl.location}" doc:name="SOAP"/>
         <mulexml:dom-to-xml-transformer returnClass="java.lang.String" />
         <flow-ref name="call-service" doc:name="Call Service"/>
