@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:scripting="http://www.mulesoft.org/schema/mule/scripting" xmlns:mulexml="http://www.mulesoft.org/schema/mule/xml"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:cxf="http://www.mulesoft.org/schema/mule/cxf" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:spring="http://www.springframework.org/schema/beans" version="EE-3.3.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd 
+http://www.mulesoft.org/schema/mule/cxf http://www.mulesoft.org/schema/mule/cxf/current/mule-cxf.xsd 
+http://www.mulesoft.org/schema/mule/scripting http://www.mulesoft.org/schema/mule/scripting/current/mule-scripting.xsd 
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd 
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd 
+http://www.mulesoft.org/schema/mule/xml http://www.mulesoft.org/schema/mule/xml/current/mule-xml.xsd ">
+    
+    <spring:beans>
+		<spring:bean id="property-placeholder"
+			class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+			<spring:property name="location"
+				value="classpath:config.properties" />
+		</spring:bean>
+
+	</spring:beans>
+    
+    <flow name="BrightStarFlow1" doc:name="BrightStarFlow1">
+        <http:inbound-endpoint exchange-pattern="request-response" host="localhost" port="8081" path="brightStarProxy" doc:name="HTTP"/>
+        <cxf:proxy-service port="${service.port}" namespace="${service.namespace}" service="${service.name}" payload="body" wsdlLocation="${service.wsdl.location}" doc:name="SOAP"/>
+        <mulexml:dom-to-xml-transformer returnClass="java.lang.String" />
+        <flow-ref name="call-service" doc:name="Call Service"/>
+        <mulexml:dom-to-xml-transformer returnClass="java.lang.String" />
+    </flow>
+    
+    <sub-flow name="call-service" doc:name="call-service">
+        <cxf:proxy-client payload="body"  doc:name="SOAP"/>
+        <scripting:component doc:name="Invoke Service">
+            <scripting:script engine="Groovy">
+                <scripting:text><![CDATA[import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpHost;
+import org.apache.http.HttpResponse;
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.NTCredentials;
+import org.apache.http.auth.params.AuthPNames;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.params.AuthPolicy;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.protocol.BasicHttpContext;
+import org.apache.http.protocol.HttpContext;
+
+DefaultHttpClient httpClient = new DefaultHttpClient();
+		List<String> authPreferences = new ArrayList<String>(); 
+        authPreferences.add(AuthPolicy.NTLM); 
+        httpClient.getParams().setParameter(AuthPNames.TARGET_AUTH_PREF, authPreferences); 
+		NTCredentials credentials = new NTCredentials("${ntlm.user}", "${ntlm.password}", "${ntlm.workstation}", "${ntlm.domain}");
+		httpClient.getCredentialsProvider().setCredentials(AuthScope.ANY, credentials);
+		HttpHost httpHost = new HttpHost("${ntlm.host}", 90, "http");
+		HttpContext localContext = new BasicHttpContext();
+		HttpPost httpPost = new HttpPost("${service.path}");
+		httpPost.setEntity(new StringEntity(eventContext.getMessageAsString()));
+		httpPost.addHeader("Content-Type", "text/xml;charset=UTF-8");
+		httpPost.addHeader("SOAPAction", "${soap.action}");
+		HttpResponse response = httpClient.execute(httpHost, httpPost, localContext);
+		HttpEntity entity = response.getEntity();
+		InputStreamReader inputStreamReader = new InputStreamReader(entity.getContent());
+		BufferedReader bufferedReader = new BufferedReader(inputStreamReader);
+		StringBuilder stringBuilder = new StringBuilder();
+		String nextLine = null;
+		while ((nextLine = bufferedReader.readLine()) != null) {
+			stringBuilder.append(nextLine);
+		}
+		return stringBuilder.toString();]]></scripting:text>
+            </scripting:script>
+        </scripting:component>
+    </sub-flow>
+    
+</mule>
